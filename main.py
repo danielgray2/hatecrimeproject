@@ -6,6 +6,7 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 from urllib.request import urlopen
 import plotly.graph_objects as go
+import plotly.express as px
 import json
 import us
 
@@ -46,6 +47,14 @@ class DbHelper():
       return f"SELECT YEAR(Incident_date) AS Year, COUNT(Incident_id) AS Incident_count FROM CRIME, LOCATION WHERE CRIME.Bias LIKE '%%{bias}%%' AND YEAR(Incident_date) BETWEEN {start_year} AND {end_year} AND CRIME.Location_id = LOCATION.Location_id GROUP BY YEAR(Incident_date);"
     return f"SELECT YEAR(Incident_date) AS Year, COUNT(Incident_id) AS Incident_count FROM CRIME, LOCATION WHERE CRIME.Bias LIKE '%%{bias}%%' AND YEAR(Incident_date) BETWEEN {start_year} AND {end_year} AND CRIME.Location_id = LOCATION.Location_id AND LOCATION.State = '{state}' GROUP BY YEAR(Incident_date);"
 
+  @classmethod
+  def public_agency_query_generator(cls):
+    return f"SELECT Agency_name, COUNT(Location_id) FROM PUBLIC_AGENCY GROUP BY Agency_name ORDER BY COUNT(Location_id) DESC LIMIT 10;"
+
+  @classmethod
+  def victims_and_offenders_query_generator(cls, year):
+    return f"SELECT Vicv.vic_avg, Offv.off_avg FROM (SELECT AVG(No_victims) AS vic_avg FROM VICTIM, CRIME WHERE Crime_id=Incident_id AND YEAR(Incident_date) = {year}) as Vicv, (SELECT AVG(No_offenders) AS off_avg FROM OFFENDER, CRIME WHERE Incident_id=Crime_id AND YEAR(Incident_date) = {year} AND No_offenders != 0) as Offv;"
+
 
 class PageHelper():
 
@@ -72,6 +81,8 @@ class PageHelper():
 
     cls.map_query = DbHelper.heat_map_query_generator(start_year=cls.start_year, end_year=cls.end_year, bias=cls.bias)
     cls.time_series_query = DbHelper.time_series_query_generator(start_year=cls.start_year, end_year=cls.end_year, bias=cls.bias, state=cls.state)
+    cls.agency_query = DbHelper.public_agency_query_generator()
+    cls.victims_and_offenders_query = DbHelper.victims_and_offenders_query_generator(year=cls.start_year)
 
   @classmethod
   def parse_biases(cls, bias_list):
@@ -98,6 +109,8 @@ class PageHelper():
           Visualizations of hate crime data from across the United States.
       '''),
 
+      html.H2(children = "Hate Crimes across the United States"),
+
       html.Div(children=[
         dcc.Dropdown(
           id='beginning-year-heat-map',
@@ -122,6 +135,8 @@ class PageHelper():
       html.Div(children=
           dcc.Graph(id='heat-map', figure=cls.create_map_fig(cls.map_query))
       ),
+
+      html.H2(children = "Hate Crimes by Year, State, and Victim"),
 
       html.Div(children=[
         dcc.Dropdown(
@@ -153,6 +168,23 @@ class PageHelper():
       html.Div(children=
           dcc.Graph(id='time-series', figure=cls.create_time_series_fig(cls.time_series_query))
       ),
+
+      html.H2(children = "Number of Offenders Prosecuted by Agency"),
+
+      html.Div(children=
+          dcc.Graph(id='public-agency', figure=cls.create_agency_fig(cls.agency_query))
+      ),
+
+      html.Div(children=[
+        dcc.Dropdown(
+          id='year-victims-and-offenders',
+          options=[{'label': year, 'value': year} for year in cls.years_list],
+          value=cls.end_year,
+          clearable=False
+        ),
+      ]),
+
+      html.Div(children=dcc.Graph(id='victims-and-offenders', figure=cls.create_victims_and_offenders_fig(cls.victims_and_offenders_query)))
     ]
 
     cls.app.layout = html.Div(children=child_array)
@@ -182,6 +214,16 @@ class PageHelper():
       query = DbHelper.time_series_query_generator(start_year=start_year, end_year=end_year, state=state, bias=bias)
       return cls.create_time_series_fig(query)
 
+    @cls.app.callback(
+      Output("victims-and-offenders", 'figure'),
+      [
+        Input('year-victims-and-offenders', 'value')
+      ]
+    )
+    def update_victims_and_offenders(year):
+      query = DbHelper.victims_and_offenders_query_generator(year=year)
+      return cls.create_victims_and_offenders_fig(query)
+
     return cls.app
 
   @classmethod
@@ -206,6 +248,33 @@ class PageHelper():
     df = DbHelper.query_db(query)
     df.columns = ['year', 'incident_count']
     fig = go.Figure([go.Bar(x=df['year'], y=df['incident_count'])])
+    fig.update_layout(
+      xaxis_title="Year",
+      yaxis_title="Number of Crimes"
+    )
+    return fig
+
+  @classmethod
+  def create_agency_fig(cls, query):
+    df = DbHelper.query_db(query)
+    df.columns = ['agency_name', 'crime_count']
+    fig = go.Figure([go.Bar(x=df['agency_name'], y=df['crime_count'])])
+
+    fig.update_layout(
+      xaxis_title="Public Agency Name",
+      yaxis_title="Number of Incidents Handled"
+    )
+    return fig
+
+  @classmethod
+  def create_victims_and_offenders_fig(cls, query):
+    df = DbHelper.query_db(query)
+    df.columns = ['victim_avg', 'offender_avg']
+    fig = go.Figure([go.Bar(x=["Victim Avg.", "Offender Avg."], y=[df['victim_avg'].iloc[0], df['offender_avg'].iloc[0]])])
+    fig.update_layout(
+      xaxis_title="Role in Incident",
+      yaxis_title="Number of Participants"
+    )
     return fig
 
   @classmethod
