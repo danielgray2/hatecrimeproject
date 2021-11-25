@@ -1,5 +1,5 @@
 # hatecrimeproject
-This is a project to visualize hate crime data
+This is a project to visualize hate crime data collected from the FBI.
 
 ## To run this project
 1. Make sure that you have the hate crimes database up and running
