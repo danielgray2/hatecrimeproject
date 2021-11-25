@@ -1,4 +1,4 @@
-# Hatecrime Project
+# Hate Crime Project
 This was a group project that I built during college. My team and I built a database from a dataset
 collected from the FBI and created a simple webpage using Plotly Dash to visualize the data.
 
