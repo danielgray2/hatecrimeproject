@@ -1,5 +1,6 @@
-# hatecrimeproject
-This is a project to visualize hate crime data collected from the FBI.
+# Hatecrime Project
+This was a group project that I built during college. My team and I built a database from a dataset
+collected from the FBI and created a simple webpage using Plotly Dash to visualize the data.
 
 ## To run this project
 1. Make sure that you have the hate crimes database up and running
